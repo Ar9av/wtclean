@@ -21,7 +21,7 @@ git worktree add -q ../busy -b busy;       (cd ../busy && exec sleep 60) & SLEEP
 out=$("$WT" --json --idle 0 --stale 0 . | python3 -c '
 import json,sys; print(" ".join(r["path"].rsplit("/",1)[1] + "=" + r["action"] for r in json.load(sys.stdin)))')
 echo "$out"
-for want in secret=keep busy=keep merged=kill dirty=keep unmerged=kill gone-dir=prune detached=keep locked=keep; do
+for want in secret=keep busy=keep merged=remove dirty=keep unmerged=remove gone-dir=prune detached=keep locked=keep; do
   [[ " $out " == *" $want "* ]] || { echo "FAIL: expected $want"; exit 1; }
 done
 "$WT" --idle 24 --json . | grep -q '"active' || { echo "FAIL: fresh worktree should be active"; exit 1; }

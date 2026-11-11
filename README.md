@@ -1,84 +1,103 @@
 # wtclean
 
-Coding agents (Claude Code, Codex, Cursor, Conductor...) each get their own git worktree. Nobody cleans them up. A few weeks in you have 150 worktrees per repo and gigabytes of stale `node_modules`.
-
-`wtclean` finds the dead ones and removes them without losing work. One Python file, no dependencies.
+Clean up the git worktrees your coding agents leave behind, without losing work.
 
 ![wtclean demo](screenshot.png)
+
+## The problem
+
+Claude Code, Codex, Cursor, Conductor and friends run each task in its own **git worktree**: a second checkout of your repo in another folder, on its own branch. That's what lets five agents work on one repo without stepping on each other.
+
+Nobody deletes them afterwards. The agent finishes, the PR merges, and the folder stays, with its own copy of `node_modules`, build output and `.venv`. On one machine after a few weeks:
+
+- **287 worktrees across 101 repos**, two repos with 140+ each
+- **54 GB** of disk, mostly duplicated dependencies
+- `git worktree list` too long to read, branch pickers full of dead branches
+- no way to tell which ones an agent is still using
+
+The obvious fixes don't work:
+
+| You try | What happens |
+|---|---|
+| `git worktree prune` | Only forgets worktrees whose folder is *already* deleted. Frees nothing. |
+| `rm -rf` the folders | Deletes uncommitted work, and any `.env` you copied in. Git's metadata is left dangling. |
+| `git worktree remove --force` | Same: `--force` is the flag that skips the "you have changes" check. |
+| Ask the agent to clean up | [It happens](https://mergify.com/blog/the-day-my-ai-agent-deleted-29-git-worktrees): an agent removed 29 active worktrees. |
+
+## What wtclean does
+
+It looks at every worktree and sorts it into one of three groups:
+
+- **REMOVE** if it's clean and either
+  - its branch is merged or the remote branch was deleted, and it's been idle for 24 hours, or
+  - it's unmerged and has been idle for 7 days. The folder is removed and the branch is kept.
+- **PRUNE** if the folder is already gone and git still lists it.
+- **KEEP** if it has uncommitted changes, is locked, has a process running inside it, was used recently, holds a `.env` the main checkout doesn't have, or is a detached checkout with unpushed commits.
+
+It's a dry run until you add `--apply`.
+
+### Why nothing gets lost
+
+- Removal uses plain `git worktree remove`. Git itself refuses to delete a worktree with changes.
+- A branch is only deleted with `git branch -d`, which refuses unmerged work. Removing the folder of an unmerged branch keeps every commit, and `git worktree add <path> <branch>` brings it back.
+- What does get deleted is ignored stuff: `node_modules`, build output, caches. That's the disk you get back. Ignored `.env` files are checked first, and a worktree is kept if its `.env` differs from the main checkout's.
 
 ## Install
 
 ```bash
+mkdir -p ~/.local/bin
 curl -fsSL https://raw.githubusercontent.com/Ar9av/wtclean/main/wtclean -o ~/.local/bin/wtclean
 chmod +x ~/.local/bin/wtclean
 ```
 
-Needs Python 3.9+ and git. macOS and Linux.
+Needs git and Python 3.9+, which macOS and most Linux distros already have. If `wtclean` isn't found afterwards, add `export PATH="$HOME/.local/bin:$PATH"` to your `~/.zshrc` or `~/.bashrc`.
 
 ## Use
 
 ```bash
-wtclean                         # dry run for the repo you're in
-wtclean --scan ~/code           # dry run for every repo under ~/code
-wtclean --scan ~/code --apply   # remove the KILL rows
+wtclean                                  # what would go, in the repo you're in
+wtclean --scan ~/code                    # same, for every repo under ~/code
+wtclean --scan ~/code --fetch --apply    # refresh from remotes, then clean up
 ```
 
-Try it on a throwaway repo first: `./demo.sh` builds one full of fake agent worktrees and runs wtclean on it.
+Want to see it before pointing it at real repos? Clone this repo and run `./demo.sh`. It builds a throwaway repo full of fake agent worktrees and runs wtclean on it.
 
-## What gets removed
-
-| Row   | When |
-|-------|------|
-| KILL  | clean, and either merged / remote branch deleted (idle > 24h) or unmerged and idle > 7 days |
-| PRUNE | directory already deleted, git still lists it |
-| KEEP  | anything below |
-
-A worktree is always kept if it:
-
-- has uncommitted or untracked changes
-- is locked (`git worktree lock`)
-- has a process running inside it (dev server, shell, agent)
-- was touched within `--idle` hours, or is unmerged and younger than `--stale` days
-- holds an ignored `.env*` file the main checkout doesn't have
-- is a detached HEAD with commits not on any remote
-
-## Why it's safe
-
-- Dry run unless you pass `--apply`.
-- Removal is `git worktree remove` without `--force`, so git itself refuses dirty trees. Never `rm -rf`.
-- Branches are deleted only with `git branch -d`, which refuses unmerged work. Unmerged branches stay, so removing an idle worktree loses no commits; `git worktree add <path> <branch>` brings it back.
-- Ignored files (`node_modules`, build output) go with the worktree. That's the disk you get back.
+The first `--apply` on a big backlog can take several minutes, mostly deleting `node_modules`. It shows progress as it goes.
 
 ## Options
 
 | Flag | Default | |
 |------|---------|--|
-| `--scan DIR` | | find repos under DIR (depth 3) |
+| `--scan DIR` | | find repos under DIR (3 levels deep) |
 | `--apply` | off | actually remove |
-| `--idle H` | 24 | hours untouched before merged/gone worktrees count as dead |
-| `--stale D` | 7 | days untouched before unmerged worktrees count as dead |
-| `--fetch` | off | `git fetch --prune` first so merged/gone is current |
+| `--fetch` | off | `git fetch --prune` first, so merged / deleted-on-remote is current |
+| `--idle H` | 24 | hours untouched before a merged worktree is removed |
+| `--stale D` | 7 | days untouched before an unmerged worktree is removed |
+| `--all` | off | also list KEEP rows, with the reason |
 | `--json` | off | machine-readable output |
-| `--all` | off | also print KEEP rows |
 
-## Use it from an agent
+## Use it from your agents
 
-Paste into `AGENTS.md` / `CLAUDE.md`:
+Paste this into `AGENTS.md` or `CLAUDE.md`:
 
 ```
-Worktrees: lock the worktree you work in with `git worktree lock --reason "<task>" <path>`
-and unlock it when done. Check for leftovers with `wtclean --json`. Only run
-`wtclean --apply` when the user asks.
+Worktrees: lock the worktree you work in with
+`git worktree lock --reason "<task>" <path>` and unlock it when you finish.
+To check for leftovers, run `wtclean --json`. Only run `wtclean --apply` when the user asks.
 ```
 
-`--json` returns one object per worktree: `path`, `branch`, `action` (`kill` / `prune` / `keep`), `reason`, `idle_h`.
+`--json` returns one object per worktree: `path`, `branch`, `action` (`remove` / `prune` / `keep`), `reason`, `idle_h`.
 
-## Test
+Or run it on a schedule. This crontab line cleans up every Monday at 9am:
+
+```
+0 9 * * 1  ~/.local/bin/wtclean --scan ~/code --fetch --apply >> ~/.wtclean.log 2>&1
+```
+
+## Development
 
 ```bash
-./test.sh
+./test.sh   # builds a scratch repo covering every case and checks each verdict
 ```
 
-## License
-
-MIT
+One file, standard library only. MIT licensed.
