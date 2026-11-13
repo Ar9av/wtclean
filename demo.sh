@@ -3,7 +3,7 @@
 #   ./demo.sh          dry run
 #   ./demo.sh --apply  dry run, then clean up
 set -euo pipefail
-WT="$(cd "$(dirname "$0")" && pwd)/wtclean"
+WT="$(cd "$(dirname "$0")" && pwd)/git_wtclean.py"
 T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 export GIT_AUTHOR_NAME=demo GIT_AUTHOR_EMAIL=demo@example.com GIT_COMMITTER_NAME=demo GIT_COMMITTER_EMAIL=demo@example.com
 cd "$T"; git init -q --bare origin.git; git clone -q origin.git app 2>/dev/null; cd app

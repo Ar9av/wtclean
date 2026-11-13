@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds a throwaway repo with one worktree per case, runs wtclean --apply, asserts outcomes.
 set -euo pipefail
-WT="$(cd "$(dirname "$0")" && pwd)/wtclean"
+WT="$(cd "$(dirname "$0")" && pwd)/git_wtclean.py"
 T=$(cd "$(mktemp -d)" && pwd -P); trap 'kill $SLEEPER 2>/dev/null; rm -rf "$T"' EXIT
 cd "$T"; export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 git init -q --bare origin.git; git clone -q origin.git main 2>/dev/null; cd main

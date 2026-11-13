@@ -2,7 +2,7 @@
 
 Clean up the git worktrees your coding agents leave behind, without losing work.
 
-![wtclean demo](screenshot.png)
+![wtclean demo](https://raw.githubusercontent.com/Ar9av/wtclean/main/screenshot.png)
 
 ## The problem
 
@@ -45,12 +45,20 @@ It's a dry run until you add `--apply`.
 ## Install
 
 ```bash
+pipx install git-wtclean      # or: uv tool install git-wtclean / pip install git-wtclean
+```
+
+That gives you `wtclean`, and `git wtclean` works too. Needs git and Python 3.9+, macOS or Linux.
+
+No pip? It's one file:
+
+```bash
 mkdir -p ~/.local/bin
-curl -fsSL https://raw.githubusercontent.com/Ar9av/wtclean/main/wtclean -o ~/.local/bin/wtclean
+curl -fsSL https://raw.githubusercontent.com/Ar9av/wtclean/main/git_wtclean.py -o ~/.local/bin/wtclean
 chmod +x ~/.local/bin/wtclean
 ```
 
-Needs git and Python 3.9+, which macOS and most Linux distros already have. If `wtclean` isn't found afterwards, add `export PATH="$HOME/.local/bin:$PATH"` to your `~/.zshrc` or `~/.bashrc`.
+If `wtclean` isn't found afterwards, add `export PATH="$HOME/.local/bin:$PATH"` to your `~/.zshrc` or `~/.bashrc`.
 
 ## Use
 

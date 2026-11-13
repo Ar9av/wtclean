@@ -11,6 +11,8 @@ so git itself refuses anything dirty. Branches are only deleted with
   wtclean --apply              # actually remove the REMOVE rows
   wtclean --json               # machine-readable, for agents
 """
+__version__ = "0.1.0"
+
 import argparse, filecmp, json, os, shutil, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -175,6 +177,7 @@ def apply(rows):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--version", action="version", version=f"wtclean {__version__}")
     p.add_argument("repos", nargs="*", help="repo paths (default: current repo)")
     p.add_argument("--scan", metavar="DIR", help="find repos under DIR")
     p.add_argument("--idle", type=float, default=24, help="hours untouched before a worktree counts as dead (default 24)")
